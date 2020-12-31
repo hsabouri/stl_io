@@ -61,6 +61,13 @@ impl<F> std::ops::Index<usize> for Vector<F> {
     }
 }
 
+impl<F> std::ops::IndexMut<usize> for Vector<F> {
+    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
+        assert!(i < 3);
+        &mut self.0[i]
+    }
+}
+
 impl<'a, M: Copy + Default, F: Copy + ApproxEq<Margin = M>> ApproxEq for &'a Vector<F> {
     type Margin = M;
 
