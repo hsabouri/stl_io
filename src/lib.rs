@@ -37,7 +37,7 @@
 //extern crate byteorder;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use float_cmp::{ApproxEq, F32Margin};
+use float_cmp::{ApproxEq, F32Margin, F64Margin};
 use std::io::{BufRead, BufReader, BufWriter};
 use std::io::{Read, Result, Write};
 use std::iter::Iterator;
@@ -73,9 +73,9 @@ impl<'a, M: Copy + Default, F: Copy + ApproxEq<Margin = M>> ApproxEq for &'a Vec
 }
 
 /// STL vertex - a corner of a Triangle in a 3D Mesh.
-pub type Vertex = Vector<f32>;
+pub type Vertex = Vector<f64>;
 /// STL Normal - a vector perpendicular to a Triangle in a 3D Mesh.
-pub type Normal = Vector<f32>;
+pub type Normal = Vector<f64>;
 
 /// STL Triangle, consisting of a normal and three vertices.
 /// This is the format Triangles are usually stored in STL files.
@@ -119,7 +119,7 @@ impl IndexedMesh {
                 // Verify that all vertices are different.
                 if self.vertices[face.vertices[i]].approx_eq(
                     &self.vertices[face.vertices[(i + 1) % 3]],
-                    F32Margin::default(),
+                    F64Margin::default(),
                 ) {
                     return Err(::std::io::Error::new(
                         ::std::io::ErrorKind::InvalidData,
@@ -140,9 +140,9 @@ impl IndexedMesh {
                     for i2 in 0..3 {
                         if self.vertices[face.vertices[i]].approx_eq(
                             &self.vertices[face2.vertices[(i2 + 1) % 3]],
-                            F32Margin::default(),
+                            F64Margin::default(),
                         ) && self.vertices[face.vertices[(i + 1) % 3]]
-                            .approx_eq(&self.vertices[face2.vertices[i2]], F32Margin::default())
+                            .approx_eq(&self.vertices[face2.vertices[i2]], F64Margin::default())
                         {
                             found_edge = true;
                             break;
@@ -283,12 +283,12 @@ impl<'a> BinaryStlReader<'a> {
     fn next_face(&mut self) -> Result<Triangle> {
         let mut normal = Normal::default();
         for f in &mut normal.0 {
-            *f = self.reader.read_f32::<LittleEndian>()?;
+            *f = self.reader.read_f32::<LittleEndian>()? as f64;
         }
         let mut face = [Vertex::default(); 3];
         for vertex in &mut face {
             for c in vertex.0.iter_mut() {
-                *c = self.reader.read_f32::<LittleEndian>()?;
+                *c = self.reader.read_f32::<LittleEndian>()? as f64;
             }
         }
         self.reader.read_u16::<LittleEndian>()?;
@@ -340,8 +340,8 @@ pub trait TriangleIterator: ::std::iter::Iterator<Item = Result<Triangle>> {
         for t in self {
             let t = t?;
             for (i, vertex) in t.vertices.iter().enumerate() {
-                // This is ugly, but f32 has no Eq and no Hash.
-                let bitpattern = unsafe { std::mem::transmute::<[f32; 3], [u32; 3]>(vertex.0) };
+                // This is ugly, but f64 has no Eq and no Hash.
+                let bitpattern = unsafe { std::mem::transmute::<[f64; 3], [u64; 3]>(vertex.0) };
                 let index = *vertex_to_index
                     .entry(bitpattern)
                     .or_insert_with(|| vertices.len());
@@ -457,7 +457,7 @@ impl<'a> AsciiStlReader<'a> {
             ));
         }
         let mut result_normal = Normal::default();
-        AsciiStlReader::tokens_to_f32(&face_header[2..5], &mut result_normal.0[0..3])?;
+        AsciiStlReader::tokens_to_f64(&face_header[2..5], &mut result_normal.0[0..3])?;
         self.expect_static(&["outer", "loop"])?;
         let mut result_vertices = [Vertex::default(); 3];
         for vertex_result in &mut result_vertices {
@@ -469,7 +469,7 @@ impl<'a> AsciiStlReader<'a> {
                         format!("vertex f32 f32 f32, got {:?}", line),
                     ));
                 }
-                AsciiStlReader::tokens_to_f32(&line[1..4], &mut vertex_result.0[0..3])?;
+                AsciiStlReader::tokens_to_f64(&line[1..4], &mut vertex_result.0[0..3])?;
             } else {
                 return Err(::std::io::Error::new(
                     ::std::io::ErrorKind::UnexpectedEof,
@@ -484,7 +484,7 @@ impl<'a> AsciiStlReader<'a> {
             vertices: result_vertices,
         }))
     }
-    fn tokens_to_f32(tokens: &[String], output: &mut [f32]) -> Result<()> {
+    fn tokens_to_f64(tokens: &[String], output: &mut [f64]) -> Result<()> {
         assert_eq!(tokens.len(), output.len());
         for i in 0..tokens.len() {
             let f = tokens[i].parse::<f32>().map_err(|e| {
@@ -496,7 +496,7 @@ impl<'a> AsciiStlReader<'a> {
                     format!("expected finite f32, got {} which is {:?}", f, f.classify()),
                 ));
             }
-            output[i] = f;
+            output[i] = f as f64;
         }
         Ok(())
     }
